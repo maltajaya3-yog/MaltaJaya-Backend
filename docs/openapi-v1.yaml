@@ -1,0 +1,730 @@
+openapi: 3.0.3
+info:
+  title: Maltajaya Internal Operations & Admin API
+  version: 1.0.0
+  description: >
+    Deliverable T02-D02 (Tim Asah 2026 A26-CS197 - Maltajaya).
+    Kontrak REST API /api/v1 untuk backend Express + PostgreSQL serta jembatan
+    ke layanan FastAPI AI dan Dasbor Streamlit.
+    Selaras dengan database/schema.sql v1.1. Seluruh contoh menggunakan data sintetis.
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local Development Server
+  - url: https://api-maltajaya-mvp.onrender.com/api/v1
+    description: Staging / Demo Free Tier (Placeholder)
+
+tags:
+  - name: System
+  - name: Auth
+  - name: Users
+  - name: Products & Stock
+  - name: Invoices A4
+  - name: Customers & Receivables
+  - name: Production & QC
+  - name: Payroll & Cash
+  - name: AI Integration
+  - name: Analytics
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    InternalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-API-Key
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - UNAUTHORIZED
+                - FORBIDDEN
+                - NOT_FOUND
+                - DUPLICATE_SKU
+                - DUPLICATE_CODE
+                - PRICE_UNVERIFIED
+                - STOCK_UNINITIALIZED
+                - INSUFFICIENT_STOCK
+                - INVALID_STATUS_TRANSITION
+                - AI_SERVICE_UNAVAILABLE
+                - AI_QUOTA_EXCEEDED
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 25
+        total:
+          type: integer
+          example: 120
+        total_pages:
+          type: integer
+          example: 5
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          example: staff_inventory
+        full_name:
+          type: string
+          example: Staf Gudang Contoh
+        role:
+          type: string
+          enum: [inventory, produksi, qc, owner_manager]
+        employee_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku_code:
+          type: string
+          description: Normalisasi UPPER(BTRIM(sku_code)), non-empty, unik.
+          example: SYN-MTT-30B
+        name:
+          type: string
+          example: Patung Contoh A 30CM Biru [SINTETIS]
+        main_category:
+          type: string
+          enum: [patung, salib, perlengkapan, lainnya]
+        sub_category:
+          type: string
+          nullable: true
+        size_label:
+          type: string
+          nullable: true
+          example: 30CM
+        variant_label:
+          type: string
+          nullable: true
+          example: BIRU
+        unit:
+          type: string
+          example: pcs
+        selling_price:
+          type: integer
+          format: int64
+          nullable: true
+          description: NULL bila harga belum terverifikasi. Dihapus dari respons untuk role produksi dan qc.
+          example: 75000
+        piecework_rate:
+          type: integer
+          format: int64
+          description: Dihapus dari respons untuk role produksi dan qc.
+          example: 15000
+        current_stock:
+          type: integer
+          minimum: 0
+          example: 12
+        stock_initialized_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: NULL berarti "Belum ada saldo awal".
+        is_active:
+          type: boolean
+
+    InvoiceCreateRequest:
+      type: object
+      required: [customer_id, payment_type, items]
+      properties:
+        invoice_date:
+          type: string
+          format: date
+          example: "2026-11-21"
+        customer_id:
+          type: string
+          format: uuid
+        payment_type:
+          type: string
+          enum: [tunai, tempo]
+        shipping_cost:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+        shipping_courier:
+          type: string
+          nullable: true
+          example: EKSPEDISI CONTOH
+        status:
+          type: string
+          enum: [draft, confirmed]
+          default: confirmed
+        notes:
+          type: string
+          nullable: true
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, qty]
+            properties:
+              product_id:
+                type: string
+                format: uuid
+              qty:
+                type: integer
+                minimum: 1
+
+    ReceivablePaymentRequest:
+      type: object
+      required: [customer_id, amount, payment_method, description]
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+        entry_date:
+          type: string
+          format: date
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+        payment_method:
+          type: string
+          enum: [tunai, transfer_bca, transfer_lain, lainnya]
+        description:
+          type: string
+          example: Transfer BCA cicilan piutang [SINTETIS]
+        record_to_cash:
+          type: boolean
+          default: true
+
+    AiRiskPredictPayload:
+      type: object
+      required: [customer_ref, is_synthetic_data, features]
+      properties:
+        customer_ref:
+          type: string
+          description: Token anonim pelanggan (bukan nama asli toko).
+          example: CUST-ANON-01
+        is_synthetic_data:
+          type: boolean
+          example: true
+        features:
+          type: object
+          properties:
+            default_term_days:
+              type: integer
+              example: 60
+            current_balance:
+              type: integer
+              format: int64
+              example: 2470000
+            total_debit_6m:
+              type: integer
+              format: int64
+              example: 11200000
+            total_credit_6m:
+              type: integer
+              format: int64
+              example: 8730000
+            payment_ratio:
+              type: number
+              example: 0.7795
+            avg_days_to_pay:
+              type: number
+              example: 66.0
+            open_bon_count:
+              type: integer
+              example: 2
+            days_since_last_payment:
+              type: integer
+              example: 15
+
+    AiRiskPredictResult:
+      type: object
+      required: [customer_ref, model_name, risk_score, risk_label, predicted_late]
+      properties:
+        customer_ref:
+          type: string
+        model_name:
+          type: string
+          example: random_forest_v1
+        model_version:
+          type: string
+          example: 1.0.0
+        risk_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.742
+        risk_label:
+          type: string
+          enum: [rendah, sedang, tinggi]
+        predicted_late:
+          type: boolean
+        top_factors:
+          type: array
+          items:
+            type: string
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Health check backend Express dan koneksi PostgreSQL
+      responses:
+        "200":
+          description: Server dan database sehat
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Autentikasi pengguna dan terbitkan JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login berhasil
+        "401":
+          description: Kredensial salah
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      security: [{ BearerAuth: [] }]
+      summary: Profil pengguna aktif
+      responses:
+        "200":
+          description: Profil user
+
+  /users:
+    get:
+      tags: [Users]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar akun pengguna (owner_manager)
+      responses:
+        "200":
+          description: Daftar user
+    post:
+      tags: [Users]
+      security: [{ BearerAuth: [] }]
+      summary: Buat akun pengguna baru (owner_manager)
+      responses:
+        "201":
+          description: User dibuat
+
+  /products:
+    get:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar produk berpaginasi & filter (harga disembunyikan untuk produksi/qc)
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: main_category
+          in: query
+          schema: { type: string, enum: [patung, salib, perlengkapan, lainnya] }
+        - name: stock_status
+          in: query
+          schema: { type: string, enum: [uninitialized, empty, available] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          description: Daftar produk
+    post:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Tambah produk baru (inventory, owner_manager)
+      responses:
+        "201":
+          description: Produk ditambahkan
+        "409":
+          description: DUPLICATE_SKU
+
+  /products/lookup/{sku_code}:
+    get:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Lookup cepat 1 produk berdasarkan SKU (otomatis UPPER/TRIM) untuk Auto-Fill Nota
+      parameters:
+        - name: sku_code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Detail produk ditemukan
+        "404":
+          description: Produk tidak ditemukan
+
+  /products/{id}/initialize-stock:
+    post:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Inisialisasi saldo awal fisik (mengisi stock_initialized_at meski qty = 0)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [initial_qty, reason]
+              properties:
+                initial_qty:
+                  type: integer
+                  minimum: 0
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Saldo awal berhasil diverifikasi
+
+  /products/{id}/adjust-stock:
+    post:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Koreksi stok manual (adjustment_in / adjustment_out)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [movement_type, qty, reason]
+              properties:
+                movement_type:
+                  type: string
+                  enum: [adjustment_in, adjustment_out]
+                qty:
+                  type: integer
+                  minimum: 1
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Stok dikoreksi dan mutasi tercatat
+
+  /stock-movements:
+    get:
+      tags: [Products & Stock]
+      security: [{ BearerAuth: [] }]
+      summary: Riwayat mutasi stok (qc, inventory, owner_manager)
+      responses:
+        "200":
+          description: Daftar mutasi stok
+
+  /invoices:
+    get:
+      tags: [Invoices A4]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar nota penjualan (inventory, owner_manager)
+      responses:
+        "200":
+          description: Daftar nota
+    post:
+      tags: [Invoices A4]
+      security: [{ BearerAuth: [] }]
+      summary: Buat nota baru (bila confirmed -> potong stok atomik & catat piutang/kas)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceCreateRequest"
+      responses:
+        "201":
+          description: Nota berhasil disimpan
+        "422":
+          description: PRICE_UNVERIFIED, STOCK_UNINITIALIZED, atau INSUFFICIENT_STOCK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /invoices/{id}/confirm:
+    post:
+      tags: [Invoices A4]
+      security: [{ BearerAuth: [] }]
+      summary: Konfirmasi nota draft menjadi confirmed (potong stok atomik)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Nota dikonfirmasi
+
+  /invoices/{id}/print:
+    post:
+      tags: [Invoices A4]
+      security: [{ BearerAuth: [] }]
+      summary: Catat cetak/cetak ulang nota A4 (idempoten, tidak memotong stok)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: print_count bertambah
+
+  /invoices/{id}/void:
+    post:
+      tags: [Invoices A4]
+      security: [{ BearerAuth: [] }]
+      summary: Batalkan nota confirmed dan kembalikan stok (owner_manager)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [void_reason]
+              properties:
+                void_reason:
+                  type: string
+      responses:
+        "200":
+          description: Nota dibatalkan dan stok dikembalikan
+
+  /customers:
+    get:
+      tags: [Customers & Receivables]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar pelanggan beserta saldo piutang berjalan
+      responses:
+        "200":
+          description: Daftar pelanggan
+    post:
+      tags: [Customers & Receivables]
+      security: [{ BearerAuth: [] }]
+      summary: Tambah pelanggan baru
+      responses:
+        "201":
+          description: Pelanggan ditambahkan
+
+  /customers/{id}/receivables:
+    get:
+      tags: [Customers & Receivables]
+      security: [{ BearerAuth: [] }]
+      summary: Kartu buku besar (ledger) piutang per pelanggan dengan running balance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Daftar entri ledger piutang
+
+  /receivables/payments:
+    post:
+      tags: [Customers & Receivables]
+      security: [{ BearerAuth: [] }]
+      summary: Catat pembayaran/cicilan piutang pelanggan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceivablePaymentRequest"
+      responses:
+        "201":
+          description: Pembayaran piutang tercatat
+
+  /production-qc:
+    get:
+      tags: [Production & QC]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar pencatatan produksi dan status QC
+      responses:
+        "200":
+          description: Daftar produksi/QC
+    post:
+      tags: [Production & QC]
+      security: [{ BearerAuth: [] }]
+      summary: Input hasil produksi (produksi, owner_manager)
+      responses:
+        "201":
+          description: Hasil produksi dicatat
+
+  /production-qc/{id}/inspect:
+    patch:
+      tags: [Production & QC]
+      security: [{ BearerAuth: [] }]
+      summary: Input hasil inspeksi QC (passed_qty otomatis menambah stok jadi 1x)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Inspeksi QC tersimpan
+
+  /employees:
+    get:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar master karyawan harian/borongan/prodo (owner_manager)
+      responses:
+        "200":
+          description: Daftar karyawan
+    post:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Tambah karyawan baru (owner_manager)
+      responses:
+        "201":
+          description: Karyawan dibuat
+
+  /attendances:
+    get:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar absensi harian M/L/T/P (owner_manager)
+      responses:
+        "200":
+          description: Daftar absensi
+    post:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Input absensi harian (owner_manager)
+      responses:
+        "201":
+          description: Absensi dicatat
+
+  /payrolls:
+    get:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar periode penggajian 2 mingguan (owner_manager)
+      responses:
+        "200":
+          description: Daftar periode payroll
+    post:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Generate periode payroll harian & borongan (owner_manager)
+      responses:
+        "201":
+          description: Periode payroll dibuat
+
+  /cash-transactions:
+    get:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Daftar transaksi kas bulanan (owner_manager)
+      responses:
+        "200":
+          description: Daftar transaksi kas
+    post:
+      tags: [Payroll & Cash]
+      security: [{ BearerAuth: [] }]
+      summary: Catat transaksi kas masuk/keluar (owner_manager)
+      responses:
+        "201":
+          description: Transaksi kas tercatat
+
+  /ai/receivable-risk/{customer_id}:
+    post:
+      tags: [AI Integration]
+      security: [{ BearerAuth: [] }]
+      summary: Minta skor risiko keterlambatan piutang via FastAPI & simpan riwayat (owner_manager)
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Skor risiko tersimpan
+        "503":
+          description: AI_SERVICE_UNAVAILABLE
+
+  /ai/narrative-summary:
+    post:
+      tags: [AI Integration]
+      security: [{ BearerAuth: [] }]
+      summary: Minta ringkasan naratif generatif (data anonim/agregat + fallback template)
+      responses:
+        "200":
+          description: Ringkasan naratif tersimpan
+
+  /analytics/overview:
+    get:
+      tags: [Analytics]
+      security:
+        - BearerAuth: []
+        - InternalApiKey: []
+      summary: Ringkasan KPI untuk halaman Dasbor React & Dasbor Streamlit (owner_manager / internal)
+      responses:
+        "200":
+          description: Ringkasan KPI piutang, penjualan, stok, dan kas
