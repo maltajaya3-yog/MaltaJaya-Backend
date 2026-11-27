@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+# Kredensial akun hasil seed (UID + password). Jangan pernah di-commit.
+seed-credentials.local.txt
+npm-debug.log*
+.DS_Store
+# File upload (foto produk) - bukan bagian kode.
+uploads/

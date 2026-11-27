@@ -48,6 +48,8 @@ CREATE INDEX IF NOT EXISTS idx_employees_type_active
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username        VARCHAR(50) NOT NULL UNIQUE,
+    -- Login memakai email + password. Disimpan huruf kecil agar unik tanpa beda kapital.
+    email           VARCHAR(254) NOT NULL UNIQUE CHECK (email = LOWER(BTRIM(email)) AND email LIKE '%_@_%'),
     password_hash   VARCHAR(255) NOT NULL,
     full_name       VARCHAR(120) NOT NULL,
     role            VARCHAR(20) NOT NULL CHECK (role IN ('inventory', 'produksi', 'qc', 'owner_manager')),
@@ -101,7 +103,13 @@ CREATE TABLE IF NOT EXISTS products (
     piecework_rate       BIGINT NOT NULL DEFAULT 0 CHECK (piecework_rate >= 0),
     current_stock        INTEGER NOT NULL DEFAULT 0 CHECK (current_stock >= 0),
     stock_initialized_at TIMESTAMPTZ,
+    -- Path relatif foto produk di folder uploads (mis. products/<uuid>.webp); NULL = belum ada foto.
+    image_path           VARCHAR(255),
     is_active            BOOLEAN NOT NULL DEFAULT TRUE,
+    -- Riwayat hapus: produk tidak dihapus permanen, hanya diarsipkan (is_active = FALSE).
+    deleted_at           TIMESTAMPTZ,
+    deleted_by           UUID REFERENCES users(id) ON DELETE SET NULL,
+    delete_reason        TEXT,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
