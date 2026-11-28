@@ -8,3 +8,7 @@ npm-debug.log*
 .DS_Store
 # File upload (foto produk) - bukan bagian kode.
 uploads/
+
+# Hasil audit internal dan bukti cetak demo lokal.
+/data/private/
+/artifacts/

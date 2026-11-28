@@ -154,11 +154,18 @@ CREATE INDEX IF NOT EXISTS idx_stock_movements_ref
 -- =============================================================================
 
 -- 6. Header Nota Penjualan A4
+CREATE SEQUENCE IF NOT EXISTS sales_invoice_number_seq;
+
 CREATE TABLE IF NOT EXISTS sales_invoices (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     invoice_number    VARCHAR(40) NOT NULL UNIQUE,
     invoice_date      DATE NOT NULL DEFAULT CURRENT_DATE,
-    customer_id       UUID NOT NULL REFERENCES customers(id) ON DELETE RESTRICT,
+    customer_id       UUID REFERENCES customers(id) ON DELETE RESTRICT,
+    buyer_name_snapshot VARCHAR(150),
+    buyer_code_snapshot VARCHAR(32),
+    buyer_city_snapshot VARCHAR(100),
+    buyer_phone_snapshot VARCHAR(30),
+    request_fingerprint CHAR(64),
     payment_type      VARCHAR(20) NOT NULL CHECK (payment_type IN ('tunai', 'tempo')),
     due_date          DATE,
     subtotal          BIGINT NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
