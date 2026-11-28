@@ -9,8 +9,8 @@ export const CATEGORIES = ['patung', 'salib', 'perlengkapan', 'lainnya'];
 const sku = Joi.string()
   .trim()
   .uppercase()
-  .pattern(/^[A-Z0-9][A-Z0-9./-]{0,49}$/)
-  .messages({ 'string.pattern.base': 'Kode barang hanya boleh huruf, angka, titik, garis miring, atau tanda hubung.' });
+  .pattern(/^[A-Z0-9][A-Z0-9 ./-]{0,49}$/)
+  .messages({ 'string.pattern.base': 'Kode barang hanya boleh huruf, angka, spasi, titik, garis miring, atau tanda hubung.' });
 const text = (max) => Joi.string().trim().max(max);
 const optionalText = (max) => Joi.string().trim().max(max).allow('', null).empty('').default(null);
 const reason = Joi.string().trim().min(3).max(500);

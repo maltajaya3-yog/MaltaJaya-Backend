@@ -85,6 +85,9 @@ router.post(
   canEdit,
   asyncHandler(async (req, res) => {
     const b = validate(createProductSchema, req.body);
+    if (b.selling_price !== null && !canAccess(req.user.role, 'rateEdit')) {
+      throw new ApiError(403, 'FORBIDDEN', 'Harga jual hanya bisa diatur oleh Owner & Manajer.');
+    }
     if (b.piecework_rate > 0 && !canAccess(req.user.role, 'rateEdit')) {
       throw new ApiError(403, 'FORBIDDEN', 'Tarif borongan hanya bisa diatur oleh Owner & Manajer.');
     }
@@ -104,6 +107,9 @@ router.patch(
   asyncHandler(async (req, res) => {
     const id = requireUuid(req.params.id, 'Produk');
     const changes = validate(updateProductSchema, req.body);
+    if (changes.selling_price !== undefined && !canAccess(req.user.role, 'rateEdit')) {
+      throw new ApiError(403, 'FORBIDDEN', 'Harga jual hanya bisa diatur oleh Owner & Manajer.');
+    }
     const product = await withTransaction((client) => updateProduct(client, id, changes, req.user.role));
     return ok(res, respond(req)(product), { message: 'Produk berhasil diperbarui' });
   }),

@@ -8,6 +8,7 @@ import { errorHandler, notFound } from './middleware/error.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import productRoutes from './modules/products/products.routes.js';
 import stockMovementRoutes from './modules/stock/stockMovements.routes.js';
+import { customerRoutes, invoiceRoutes } from './modules/invoices/invoices.routes.js';
 import userRoutes from './modules/users/users.routes.js';
 import { ok } from './utils/http.js';
 
@@ -49,6 +50,8 @@ api.use('/auth', authRoutes);
 api.use('/products', requireAuth, productRoutes);
 api.use('/stock-movements', requireAuth, stockMovementRoutes);
 api.use('/users', requireAuth, userRoutes);
+api.use('/customers', requireAuth, customerRoutes);
+api.use('/invoices', requireAuth, invoiceRoutes);
 
 app.use('/api/v1', api);
 app.use(notFound);
